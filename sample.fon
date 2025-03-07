@@ -1,0 +1,4 @@
+biar
+    square = λx -> * x x
+di
+    + 5 (square 8)
