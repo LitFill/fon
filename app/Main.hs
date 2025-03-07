@@ -11,6 +11,7 @@ import Text.Megaparsec      (Parsec, parse, parseTest, (<|>), oneOf, noneOf, man
 import Text.Megaparsec.Char (string, char, space)
 
 import Text.Megaparsec.Char.Lexer qualified as L (decimal)
+import System.Environment (getArgs)
 
 data Expr :: Type where
     LitInt  :: Integer -> Expr
@@ -157,10 +158,38 @@ parseFile fname = do
     prog <- pack <$> readFile fname
     parseTest exprP prog
 
+transpile :: Expr -> String
+transpile (LitInt num)           = show num
+transpile (LitBool bool)         = show bool
+transpile (Var name)             = name
+transpile (BinOp op arg1 arg2)   = transpile arg1 ++ " " ++ transpileOp op ++ " " ++ transpile arg2
+transpile (If cond expr1 expr2)  = "if " ++ transpile cond ++ " then " ++ transpile expr1 ++ " else " ++ transpile expr2
+transpile (Lambda name expr)     = "\\" ++ name ++ " -> " ++ transpile expr
+transpile (App fun arg)          = "(" ++ transpile fun ++ " " ++ transpile arg ++ ")"
+transpile (Let name expr1 expr2) = "let " ++ name ++ " = " ++ transpile expr1 ++ " in " ++ transpile expr2
+
+transpileOp :: Op -> String
+transpileOp = \case
+    Add  -> "+"
+    Sub  -> "-"
+    Mul  -> "*"
+    Div  -> "/"
+    Eq   -> "="
+    Lt   -> "<"
+    Gt   -> ">"
+
+transpileFile :: FilePath -> IO ()
+transpileFile fname = do
+    prog <- pack <$> readFile fname
+    parseTest exprP prog
+    case parse exprP "" prog of
+        Right ast -> transpile ast |> ("module Main where\n\nmain :: IO ()\nmain = print $ " ++) |> writeFile (fname ++ ".hs")
+        Left  _   -> putStrLn "error"
+
 main :: IO ()
 main = do
-    let input = "halo"
-    print <| parse haloP "" input
-    print <| parse litStringP "" "«urmom so fat»"
-    parseTest exprP sample
-
+    getArgs >>= \case
+        [] -> putStrLn "usage:\n\ttranspile <fname>\t\ttranspile to haskell\n\tparse <fname>\t\tparse AST"
+        ["transpile", fname] -> transpileFile fname
+        ["parse", fname] -> parseFile fname
+        _ -> putStrLn "usage:\n\ttranspile <fname>\t\ttranspile to haskell\n\tparse <fname>\t\tparse AST"

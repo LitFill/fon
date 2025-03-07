@@ -1,4 +1,12 @@
-biar
-    square = λx -> * x x
+biar kuadrat = λx -> * x x
 di
-    + 5 (square 8)
+
+biar tambah_5 = λx -> + 5 x
+di
+
+biar hasil = (tambah_5 (kuadrat 8))
+di
+
+jika < hasil 100
+    maka hasil
+    tidak 1000000
