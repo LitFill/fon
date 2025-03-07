@@ -7,6 +7,12 @@ di
 biar hasil = (tambah_5 (kuadrat 8))
 di
 
+biar string =
+«ini adalah \
+contoh "string" dengan «delimiter «depan»» yang berbeda \
+dari delimiter belakang»
+di
+
 jika < hasil 100
     maka hasil
     tidak 1000000

@@ -5,28 +5,45 @@ module Main where
 import Flow
 
 import Data.Kind            (Type)
-import Data.Text            (Text, pack)
+import Data.Text            (Text, pack, replace, unpack)
 import Data.Void            (Void)
-import Text.Megaparsec      (Parsec, parse, parseTest, (<|>), oneOf, noneOf, many, some, choice)
+import Text.Megaparsec      (Parsec, parse, parseTest, (<|>), oneOf, noneOf, many, some, choice, satisfy, between)
 import Text.Megaparsec.Char (string, char, space)
 
 import Text.Megaparsec.Char.Lexer qualified as L (decimal)
 import System.Environment (getArgs)
 
 data Expr :: Type where
-    LitInt  :: Integer -> Expr
-    LitBool :: Bool    -> Expr
-    Var     :: String  -> Expr
-    BinOp   :: Op      -> Expr -> Expr -> Expr
-    If      :: Expr    -> Expr -> Expr -> Expr
-    Lambda  :: String  -> Expr -> Expr
-    App     :: Expr    -> Expr -> Expr
-    Let     :: String  -> Expr -> Expr -> Expr
+    LitInt    :: Integer   -> Expr
+    LitBool   :: Bool      -> Expr
+    LitString :: FonString -> Expr
+    Var       :: String    -> Expr
+    BinOp     :: Op        -> Expr -> Expr -> Expr
+    If        :: Expr      -> Expr -> Expr -> Expr
+    Lambda    :: String    -> Expr -> Expr
+    App       :: Expr      -> Expr -> Expr
+    Let       :: String    -> Expr -> Expr -> Expr
     deriving (Show, Eq)
 
 data Op :: Type where
     Add, Sub, Mul, Div, Eq, Lt, Gt :: Op
     deriving (Show, Eq)
+
+data FonString where
+    FonString :: [FonStringContent] -> FonString
+    deriving Eq
+
+instance Show FonString where
+    show (FonString text) = show (concatMap show text)
+
+data FonStringContent :: Type where
+    FonText   :: String    -> FonStringContent
+    FonNested :: FonString -> FonStringContent
+    deriving Eq
+
+instance Show FonStringContent where
+    show (FonText   str) = str
+    show (FonNested str) = show str
 
 type Parser = Parsec Void Text
 
@@ -58,8 +75,28 @@ escapedCharP = do
 normalCharP :: Parser Char
 normalCharP = noneOf ("«»\\" :: String)
 
-litStringP :: Parser String
-litStringP = char '«' *> many (normalCharP <|> escapedCharP) <* char '»'
+stringP :: Parser String
+stringP = char '«' *> many (normalCharP <|> escapedCharP) <* char '»'
+
+stringP' :: Parser String
+stringP' = between (char '«') (char '»') (many (normalCharP <|> escapedCharP) <|> stringP')
+
+litStringP :: Parser Expr
+litStringP = LitString <$> fonstring
+
+fonstring :: Parser FonString
+fonstring = do
+    _ <- char '«'
+    content <- many foncontent
+    _ <- char '»'
+    pure <| FonString content
+
+foncontent :: Parser FonStringContent
+foncontent = fontext <|> fonnested
+  where
+    fontext = FonText . clean <$> some (satisfy (\c -> c /= '«' && c /= '»'))
+    fonnested = FonNested <$> fonstring
+    clean = unpack . replace "\\\n" "" . pack
 
 validIdentP :: Parser String
 validIdentP = some <| noneOf ("«»\\ /()[]{}\n\t" :: String)
@@ -142,7 +179,7 @@ nonBinOpP :: Parser Expr
 nonBinOpP = choice [literalsP, ifP, lambdaP, applyP, letP, varP]
 
 literalsP :: Parser Expr
-literalsP = choice [litIntP, litBoolP]
+literalsP = choice [litIntP, litBoolP, litStringP]
 
 exprP :: Parser Expr
 exprP = choice [literalsP, binOpP, nonBinOpP]
@@ -161,6 +198,7 @@ parseFile fname = do
 transpile :: Expr -> String
 transpile (LitInt num)           = show num
 transpile (LitBool bool)         = show bool
+transpile (LitString str)        = show str
 transpile (Var name)             = name
 transpile (BinOp op arg1 arg2)   = transpile arg1 ++ " " ++ transpileOp op ++ " " ++ transpile arg2
 transpile (If cond expr1 expr2)  = "if " ++ transpile cond ++ " then " ++ transpile expr1 ++ " else " ++ transpile expr2

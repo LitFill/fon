@@ -10,7 +10,7 @@ syn match myoperator "[+\-*/=<>\\]"
 
 syn keyword myboolean benar salah
 syn match   mynumber  "\<\d\+\>"
-syn region  mystring  start="«" end="»" contains=myescape
+syn region  mystring  start="«" end="»" contains=myescape,mystring
 syn match   myescape  "\\[\\«»nt]"
 
 syn match myidentifier "[a-zA-Z_][a-zA-Z0-9_]"
